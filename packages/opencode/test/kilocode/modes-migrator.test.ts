@@ -169,6 +169,74 @@ describe("ModesMigrator", () => {
       const agent = ModesMigrator.convertMode(mode)
       expect(agent.prompt).toBe("You are a test agent.")
     })
+
+    test("sets model when provided", () => {
+      const mode: ModesMigrator.KilocodeMode = {
+        slug: "test",
+        name: "Test",
+        roleDefinition: "Role",
+        groups: [],
+        model: "anthropic/claude-opus-4-6",
+      }
+
+      const agent = ModesMigrator.convertMode(mode)
+      expect(agent.model).toBe("anthropic/claude-opus-4-6")
+    })
+
+    test("omits model when not provided", () => {
+      const mode: ModesMigrator.KilocodeMode = {
+        slug: "test",
+        name: "Test",
+        roleDefinition: "Role",
+        groups: [],
+      }
+
+      const agent = ModesMigrator.convertMode(mode)
+      expect(agent.model).toBeUndefined()
+    })
+
+    test("sets temperature when provided", () => {
+      const mode: ModesMigrator.KilocodeMode = {
+        slug: "test",
+        name: "Test",
+        roleDefinition: "Role",
+        groups: [],
+        temperature: 0.7,
+      }
+
+      const agent = ModesMigrator.convertMode(mode)
+      expect(agent.temperature).toBe(0.7)
+    })
+
+    test("sets top_p when provided", () => {
+      const mode: ModesMigrator.KilocodeMode = {
+        slug: "test",
+        name: "Test",
+        roleDefinition: "Role",
+        groups: [],
+        top_p: 0.9,
+      }
+
+      const agent = ModesMigrator.convertMode(mode)
+      expect(agent.top_p).toBe(0.9)
+    })
+
+    test("sets all parameters including model, temperature, and top_p", () => {
+      const mode: ModesMigrator.KilocodeMode = {
+        slug: "test",
+        name: "Test",
+        roleDefinition: "Role",
+        groups: [],
+        model: "anthropic/claude-opus-4-6",
+        temperature: 0.5,
+        top_p: 0.95,
+      }
+
+      const agent = ModesMigrator.convertMode(mode)
+      expect(agent.model).toBe("anthropic/claude-opus-4-6")
+      expect(agent.temperature).toBe(0.5)
+      expect(agent.top_p).toBe(0.95)
+    })
   })
 
   describe("readModesFile", () => {
@@ -315,6 +383,27 @@ describe("ModesMigrator", () => {
       expect(Object.keys(result.agents)).toHaveLength(2)
       expect(result.agents).toHaveProperty("translate")
       expect(result.agents).toHaveProperty("reviewer")
+    })
+
+    test("reads modes with model from .kilocodemodes", async () => {
+      await using tmp = await tmpdir({
+        init: async (dir) => {
+          await Bun.write(
+            path.join(dir, ".kilocodemodes"),
+            `customModes:
+  - slug: specialized
+    name: Specialized
+    roleDefinition: A specialized agent
+    groups:
+      - read
+    model: openai/gpt-4`,
+          )
+        },
+      })
+
+      const result = await ModesMigrator.migrate({ projectDir: tmp.path, skipGlobalPaths: true })
+
+      expect(result.agents.specialized.model).toBe("openai/gpt-4")
     })
   })
 })

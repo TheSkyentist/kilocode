@@ -15,6 +15,9 @@ export namespace ModesMigrator {
     customInstructions?: string
     whenToUse?: string
     description?: string
+    model?: string
+    temperature?: number
+    top_p?: number
     source?: "global" | "project" | "organization"
   }
 
@@ -81,12 +84,29 @@ export namespace ModesMigrator {
   export function convertMode(mode: KilocodeMode): Config.Agent {
     const prompt = [mode.roleDefinition, mode.customInstructions].filter(Boolean).join("\n\n")
 
-    return {
+    const agent: Config.Agent = {
       mode: "primary",
       description: mode.description ?? mode.whenToUse ?? mode.name,
       prompt,
       permission: convertPermissions(mode.groups),
     }
+
+    // Set model if provided (format: "providerID/modelID")
+    if (mode.model) {
+      agent.model = mode.model
+    }
+
+    // Set temperature if provided
+    if (mode.temperature !== undefined) {
+      agent.temperature = mode.temperature
+    }
+
+    // Set top_p if provided
+    if (mode.top_p !== undefined) {
+      agent.top_p = mode.top_p
+    }
+
+    return agent
   }
 
   export async function readModesFile(filepath: string): Promise<KilocodeMode[]> {
@@ -122,28 +142,32 @@ export namespace ModesMigrator {
     const allModes: KilocodeMode[] = []
 
     if (!options.skipGlobalPaths) {
-      // 1. VSCode extension global storage (primary location for global modes)
+      // 1. .config/kilo/custom_modes.yaml (standard config location)
+      const configPath = path.join(os.homedir(), ".config", "kilo", "custom_modes.yaml")
+      allModes.push(...(await readModesFile(configPath)))
+
+      // 2. VSCode extension global storage
       const vscodeGlobalPath = path.join(KilocodePaths.vscodeGlobalStorage(), "settings", "custom_modes.yaml")
       allModes.push(...(await readModesFile(vscodeGlobalPath)))
 
-      // 2. CLI global settings (fallback/alternative location)
+      // 3. CLI global settings (fallback/alternative location)
       const cliGlobalPath = path.join(os.homedir(), ".kilocode", "cli", "global", "settings", "custom_modes.yaml")
       allModes.push(...(await readModesFile(cliGlobalPath)))
 
-      // 3. Home directory .kilocodemodes
+      // 4. Home directory .kilocodemodes
       const homeModesPath = path.join(os.homedir(), ".kilocodemodes")
       if (homeModesPath !== options.projectDir) {
         allModes.push(...(await readModesFile(homeModesPath)))
       }
     }
 
-    // 4. Legacy/explicit global settings dir (for backwards compatibility and testing)
+    // 5. Legacy/explicit global settings dir (for backwards compatibility and testing)
     if (options.globalSettingsDir) {
       const legacyPath = path.join(options.globalSettingsDir, "custom_modes.yaml")
       allModes.push(...(await readModesFile(legacyPath)))
     }
 
-    // 5. Project .kilocodemodes
+    // 6. Project .kilocodemodes
     const projectModesPath = path.join(options.projectDir, ".kilocodemodes")
     allModes.push(...(await readModesFile(projectModesPath)))
 
